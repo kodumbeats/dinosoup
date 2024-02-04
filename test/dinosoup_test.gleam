@@ -101,7 +101,13 @@ pub fn restart_child_on_exit_test() {
 //   |> should.equal(0)
 // }
 
-// mocks
+fn rip(server: process.Subject(TestMessage)) {
+  actor.send(server, RIP)
+  // TODO this is never a good sign in tests
+  process.sleep(1)
+}
+
+// Mock actor for testing
 
 pub type TestMessage {
   Ping(String, reply_with: process.Subject(String))
@@ -110,11 +116,6 @@ pub type TestMessage {
 
 pub type TestState =
   List(String)
-
-fn rip(server: process.Subject(TestMessage)) {
-  actor.send(server, RIP)
-  process.sleep(1)
-}
 
 fn test_handler(msg: TestMessage, state: TestState) {
   case msg {

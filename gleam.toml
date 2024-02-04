@@ -1,13 +1,10 @@
 name = "dinosoup"
 version = "0.0.1"
 
-description = "OTP dynamic supervisor in gleam"
+description = "Dynamic Supervisor for Erlang/OTP written in Gleam"
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "kodumbeats", repo = "dinosoup" }
-# links = [{ title = "Website", href = "https://gleam.run" }]
-#
-# For a full reference of all the available options, you can have a look at
-# https://gleam.run/writing-gleam/gleam-toml/.
+links = [{ title = "author", href = "https://kdmb.ca" }]
 
 [dependencies]
 gleam_stdlib = "~> 0.34 or ~> 1.0"

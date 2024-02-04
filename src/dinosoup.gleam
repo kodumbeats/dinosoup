@@ -1,32 +1,25 @@
 //// Dinosoup is an attempt of all time to implement the :simple_one_for_one
 //// gleam/erlang/supervisor restart strategy, inspired by elixir/dynamicsupervisor
 
-import gleam/dynamic.{type Dynamic}
 import gleam/erlang/process.{type Pid, type Subject}
 import gleam/function
-import gleam/io
 import gleam/list
 import gleam/otp/actor
 
-// types
+// TODO choose a data structure for grownups
 pub type Child(state, msg) =
   #(Pid, Subject(msg), ChildSpec(state, msg))
 
+/// ChildSpec is a reduction of gleam/otp/actor.{Spec}, but I'm being
+/// "opinionated" about basically just accepting the actor.start() params.
 pub type ChildSpec(state, msg) {
   ChildSpec(state: state, loop: fn(msg, state) -> actor.Next(msg, state))
 }
 
-pub type ChildStartError {
-  StartError(actor.StartError)
-  PidError(Dynamic)
-}
-
-pub type ExitMessage =
-  process.ExitMessage
-
-pub type ExitReason =
-  process.ExitReason
-
+/// All messages accepted by the dynamic supervisor.
+/// Sorta blending the Elixir/DynamicSupervisor API with gleam/otp/actor
+///
+/// Exit/1 is bound to gleam/erlang/process.{selecting_trapped_exits}}
 pub type Message(state, msg) {
   Children(reply_with: Subject(List(Child(state, msg))))
   Exit(ExitMessage)
@@ -38,23 +31,49 @@ pub type Message(state, msg) {
   Stop(ExitReason)
 }
 
-pub type StartError =
-  actor.StartError
-
+/// State of the dynamic supervisor.
+///
+/// I'm not sure if it's the right decision to have state,
+/// but eh. I wanna throw logs at swinging chainsaws.
 pub type State(state, msg) {
   State(children: List(Child(state, msg)))
 }
 
+/// Re-export of gleam/erlang/process.{ExitMessage}
+pub type ExitMessage =
+  process.ExitMessage
+
+/// Re-export of gleam/erlang/process.{ExitReason}
+pub type ExitReason =
+  process.ExitReason
+
+/// Re-export of gleam/otp/actor.{StartError}
+pub type StartError =
+  actor.StartError
+
 pub type Supervisor(state, msg) =
   Subject(Message(state, msg))
 
-// fns
-
+/// Start a new dynamic supervisor.
+///
+/// # Examples
+/// ```gleam
+/// supervisor |> dinosoup.start()
+/// ```
 pub fn start() -> Result(Supervisor(state, msg), StartError) {
   actor.Spec(init: init, init_timeout: 5000, loop: handler)
   |> actor.start_spec()
 }
 
+// TODO roll the dice: am I right?
+/// Dynamically start child under one-for-one supervision.
+/// All children must be of the same type, I think.
+///
+/// # Examples
+/// ```gleam
+/// let assert Ok(_) =
+///   supervisor |> dinosoup.kill_child(pid)
+/// ```
 pub fn start_child(
   supervisor: Supervisor(state, msg),
   child_spec: ChildSpec(state, msg),
@@ -62,15 +81,38 @@ pub fn start_child(
   actor.call(supervisor, StartChild(child_spec, _), 3000)
 }
 
+// TODO actually make this work as intended and uncomment test
+/// Kill individual child and remove from supervision.
+///
+/// # Examples
+/// ```gleam
+/// let assert Ok(_) =
+///   supervisor |> dinosoup.kill_child(pid)
+/// ```
 pub fn kill_child(supervisor: Supervisor(state, msg), child: Pid) {
   actor.call(supervisor, KillChild(child, _), 3000)
 }
 
+// TODO probably gracefully shutdown children
+/// Stop supervisor and all children.
+///
+/// # Examples
+/// ```gleam
+/// supervisor |> dinosoup.stop()
+/// ```
 pub fn stop(supervisor: Supervisor(state, msg)) {
   actor.send(supervisor, Stop(process.Normal))
 }
 
-pub fn children(supervisor: Supervisor(state, msg)) {
+// TODO pick better response structure
+/// Retrieve current state of supervised children.
+///
+/// # Examples
+/// ```gleam
+/// let assert my_children =
+///   supervisor |> dinosoup.children()
+/// ```
+pub fn children(supervisor: Supervisor(state, msg)) -> List(Child(state, msg)) {
   actor.call(supervisor, Children, 3000)
 }
 
@@ -82,9 +124,8 @@ fn init() {
     |> process.selecting(subject, function.identity)
     |> process.selecting_trapped_exits(Exit)
 
-  let state = State(children: [])
-
-  actor.Ready(state, selector)
+  State(children: [])
+  |> actor.Ready(selector)
 }
 
 fn handler(message: Message(state, msg), state: State(state, msg)) {
@@ -100,9 +141,7 @@ fn handler(message: Message(state, msg), state: State(state, msg)) {
         |> list.pop(fn(c) { c.0 == pid })
       {
         Ok(#(_, other_children)) -> {
-          let assert Nil = process.kill(pid)
-
-          actor.send(client, Ok(Nil))
+          actor.send(client, Ok(process.kill(pid)))
           actor.continue(State(children: other_children))
         }
         Error(_) -> {
