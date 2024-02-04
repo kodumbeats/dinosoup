@@ -2,7 +2,7 @@ name = "dinosoup"
 version = "0.0.1"
 
 description = "OTP dynamic supervisor in gleam"
-licences = ["MIT"]
+licences = ["Apache-2.0"]
 repository = { type = "github", user = "kodumbeats", repo = "dinosoup" }
 # links = [{ title = "Website", href = "https://gleam.run" }]
 #
@@ -11,6 +11,8 @@ repository = { type = "github", user = "kodumbeats", repo = "dinosoup" }
 
 [dependencies]
 gleam_stdlib = "~> 0.34 or ~> 1.0"
+gleam_otp = "~> 0.9"
+gleam_erlang = "~> 0.24"
 
 [dev-dependencies]
 gleeunit = "~> 1.0"
