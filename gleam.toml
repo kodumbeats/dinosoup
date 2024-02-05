@@ -1,5 +1,5 @@
 name = "dinosoup"
-version = "0.0.1"
+version = "0.0.2"
 
 description = "Dynamic Supervisor for Erlang/OTP written in Gleam"
 licences = ["Apache-2.0"]

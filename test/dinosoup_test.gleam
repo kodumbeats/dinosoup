@@ -80,26 +80,26 @@ pub fn restart_child_on_exit_test() {
 
 // TODO figure out a way to keep children dead
 //
-// pub fn kill_child_test() {
-//   let assert Ok(sup) = dinosoup.start()
-//
-//   sup
-//   |> dinosoup.start_child(ChildSpec(["test1"], test_handler))
-//   |> should.be_ok()
-//
-//   let assert [#(pid, _, _)] =
-//     sup
-//     |> dinosoup.children()
-//
-//   sup
-//   |> dinosoup.kill_child(pid)
-//   |> should.be_ok()
-//
-//   sup
-//   |> dinosoup.children()
-//   |> list.length()
-//   |> should.equal(0)
-// }
+pub fn kill_child_test() {
+  let assert Ok(sup) = dinosoup.start()
+
+  sup
+  |> dinosoup.start_child(ChildSpec(["test1"], test_handler))
+  |> should.be_ok()
+
+  let assert [#(pid, _, _)] =
+    sup
+    |> dinosoup.children()
+
+  sup
+  |> dinosoup.kill_child(pid)
+  |> should.be_ok()
+
+  sup
+  |> dinosoup.children()
+  |> list.length()
+  |> should.equal(0)
+}
 
 fn rip(server: process.Subject(TestMessage)) {
   actor.send(server, RIP)
@@ -123,6 +123,11 @@ fn test_handler(msg: TestMessage, state: TestState) {
       actor.send(client, pong)
       actor.continue(state)
     }
-    RIP -> actor.Stop(process.Abnormal("RIP"))
+    RIP -> {
+      process.self()
+      |> process.send_abnormal_exit("RIP")
+      // this is unreachable, but here to satisfy type
+      actor.Stop(process.Abnormal("RIP"))
+    }
   }
 }

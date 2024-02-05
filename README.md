@@ -19,16 +19,24 @@ Then, in your code:
 
 ```gleam
 import dinosoup
+import some.{message_handler}
 
 pub fn main() {
   let assert Ok(sup) = dinosoup.start()
 
   // children must implement same behavior (e.g. use the same handler)
-  sup |> dinosoup.start_child(ChildSpec(initial_state, message_handler))
-  sup |> dinosoup.start_child(ChildSpec(another_state, message_handler))
+  sup |> dinosoup.start_child(ChildSpec(["state"], message_handler))
+  sup |> dinosoup.start_child(ChildSpec(["different_state"], message_handler))
 
   // to get at it later
   let [#(pid, actor, spec), .._rest] = sup |> dinosoup.children()
+
+  // killed children stay dead, but Normal and Abnormal(reason)
+  // exits will be restarted
+  let assert Ok(Nil) = sup |> dinosoup.kill_child(pid)
+
+  // and now only one remains
+  let assert [_] = sup |> dinosoup.children()
 }
 ```
 
@@ -45,7 +53,7 @@ gleam shell # Run an Erlang shell
 
 ### TODO
 
-- [ ] Get `dinosoup.kill_child/2` working
+- [x] Get `dinosoup.kill_child/2` working
 - [ ] Implement more sophisticated restart/timeout strategies
 - [ ] Harmonize more closely with `gleam/otp/supervisor` behavior
 

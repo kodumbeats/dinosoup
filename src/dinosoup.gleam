@@ -58,21 +58,20 @@ pub type Supervisor(state, msg) =
 ///
 /// # Examples
 /// ```gleam
-/// supervisor |> dinosoup.start()
+/// supervisor |> dinosoup.start(dinosoup.ChildSpec(state: [], loop: handler))
 /// ```
 pub fn start() -> Result(Supervisor(state, msg), StartError) {
   actor.Spec(init: init, init_timeout: 5000, loop: handler)
   |> actor.start_spec()
 }
 
-// TODO roll the dice: am I right?
 /// Dynamically start child under one-for-one supervision.
-/// All children must be of the same type, I think.
+/// All children must be of the same type.
 ///
 /// # Examples
 /// ```gleam
 /// let assert Ok(_) =
-///   supervisor |> dinosoup.kill_child(pid)
+///   supervisor |> dinosoup.start_child(spec)
 /// ```
 pub fn start_child(
   supervisor: Supervisor(state, msg),
@@ -81,7 +80,6 @@ pub fn start_child(
   actor.call(supervisor, StartChild(child_spec, _), 3000)
 }
 
-// TODO actually make this work as intended and uncomment test
 /// Kill individual child and remove from supervision.
 ///
 /// # Examples
@@ -93,7 +91,6 @@ pub fn kill_child(supervisor: Supervisor(state, msg), child: Pid) {
   actor.call(supervisor, KillChild(child, _), 3000)
 }
 
-// TODO probably gracefully shutdown children
 /// Stop supervisor and all children.
 ///
 /// # Examples
@@ -134,7 +131,7 @@ fn handler(message: Message(state, msg), state: State(state, msg)) {
       actor.send(client, state.children)
       actor.continue(state)
     }
-    Exit(exit_message) -> handle_exit(exit_message.pid, state)
+    Exit(exit_message) -> handle_exit(exit_message, state)
     KillChild(pid, client) -> {
       case
         state.children
@@ -149,8 +146,6 @@ fn handler(message: Message(state, msg), state: State(state, msg)) {
           actor.continue(state)
         }
       }
-      actor.send(client, Ok(Nil))
-      actor.continue(state)
     }
     StartChild(spec, client) -> {
       case start_child_spec(spec) {
@@ -165,6 +160,11 @@ fn handler(message: Message(state, msg), state: State(state, msg)) {
       }
     }
     Stop(exit_reason) -> {
+      state.children
+      |> list.each(fn(child) {
+        child.0
+        |> process.send_exit()
+      })
       actor.Stop(exit_reason)
     }
   }
@@ -186,26 +186,37 @@ fn start_child_spec(
 }
 
 fn handle_exit(
-  pid: Pid,
+  exit_message: ExitMessage,
   state: State(state, msg),
 ) -> actor.Next(Message(state, msg), State(state, msg)) {
   case
     state.children
-    |> list.pop(fn(c) { c.0 == pid })
+    |> list.pop(fn(c) { c.0 == exit_message.pid })
   {
     Ok(#(child, other_children)) -> {
-      // Restart with initial spec
-      case start_child_spec(child.2) {
-        Ok(new_child) -> {
-          actor.continue(State(children: [new_child, ..other_children]))
+      case exit_message.reason {
+        // Allow killed processes to stay dead
+        process.Killed -> {
+          State(children: other_children)
+          |> actor.continue()
         }
-        Error(_) -> {
-          actor.Stop(process.Abnormal("turn-it-off-and-back-on-again failed!"))
+        _ -> {
+          // Restart with initial spec
+          case start_child_spec(child.2) {
+            Ok(new_child) -> {
+              State(children: [new_child, ..other_children])
+              |> actor.continue()
+            }
+            Error(_) -> {
+              process.Abnormal("turn-it-off-and-back-on-again failed!")
+              |> actor.Stop()
+            }
+          }
         }
       }
     }
     Error(_) -> {
-      // TODO Not sure how this case happens during tests.
+      // TODO investigate these messages - they aren't for the supervisor
       actor.continue(state)
     }
   }
